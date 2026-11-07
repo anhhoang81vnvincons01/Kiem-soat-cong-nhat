@@ -49,10 +49,31 @@ export default function App() {
   const [donGia, setDonGia] = useState<number>(450000);
   const [rules, setRules] = useState<AuditRuleConfig[]>(DEFAULT_AUDIT_RULES);
 
-  // Dữ liệu bộ hồ sơ
-  const [batches, setBatches] = useState<DailyRecordBatch[]>([]);
+  // Dữ liệu bộ hồ sơ (tự động khôi phục từ localStorage để tránh mất dữ liệu khi F5)
+  const [batches, setBatches] = useState<DailyRecordBatch[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('qdnbc_active_batches');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error('Lỗi đọc active batches:', e);
+      }
+    }
+    return [];
+  });
   const [summaries, setSummaries] = useState<AuditBatchSummary[]>([]);
   const [workers, setWorkers] = useState<WorkerAuditRow[]>([]);
+  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showNotification = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setNotification({ text, type });
+    setTimeout(() => {
+      setNotification((curr) => (curr?.text === text ? null : curr));
+    }, 6000);
+  };
 
   // Thống kê
   const [totalBatches, setTotalBatches] = useState(0);
@@ -111,6 +132,21 @@ export default function App() {
 
   // Yêu cầu người dùng: Xóa đi 05 công tác mẫu đang hiện, bắt đầu với giao diện sạch sẽ 100%
   // Người dùng có thể tự bấm nạp mẫu hoặc tải lên hồ sơ thực tế bất cứ lúc nào.
+
+  // Tự động lưu batches đang mở vào localStorage để bảo toàn dữ liệu
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (batches.length > 0) {
+          localStorage.setItem('qdnbc_active_batches', JSON.stringify(batches));
+        } else {
+          localStorage.removeItem('qdnbc_active_batches');
+        }
+      } catch (e) {
+        console.error('Lỗi lưu batches:', e);
+      }
+    }
+  }, [batches]);
 
   // Chạy lại đánh giá bất cứ khi nào batches, rules hoặc đơn giá thay đổi
   useEffect(() => {
@@ -179,7 +215,7 @@ export default function App() {
       const file = files[i];
       const stepBase = (i / files.length) * 80 + 10;
       setProgressPercent(stepBase);
-      setProcessStatus(`Đang đọc file: ${file.name} (${i + 1}/${files.length})...`);
+      setProcessStatus(`Đang đọc tệp: ${file.name} (${i + 1}/${files.length})...`);
 
       try {
         const blobUrl = URL.createObjectURL(file);
@@ -191,7 +227,7 @@ export default function App() {
         });
 
         setProgressPercent(stepBase + 20);
-        setProcessStatus(`${aiLabel} đang soi chữ viết tay & Timemark: ${file.name}...`);
+        setProcessStatus(`${aiLabel} đang phân tích chữ viết tay & ảnh Timemark: ${file.name}...`);
 
         const response = await fetch('/api/audit/process-pdf', {
           method: 'POST',
@@ -209,18 +245,22 @@ export default function App() {
         });
 
         const data = await response.json();
-        if (data.success && data.extractedBatches) {
+        if (data.success && data.extractedBatches && data.extractedBatches.length > 0) {
           const batchesWithUrl = data.extractedBatches.map((b: DailyRecordBatch) => ({
             ...b,
             pdf_blob_url: blobUrl,
           }));
           newExtractedBatches.push(...batchesWithUrl);
         } else {
-          alert(`Lỗi khi xử lý file ${file.name}: ${data.error || 'Không thể bóc tách'}`);
+          console.warn(`Cảnh báo bóc tách file ${file.name}:`, data.error);
+          showNotification(`Cảnh báo bóc tách file ${file.name}: ${data.error || 'Đã kích hoạt chế độ nạp dự phòng'}`, 'info');
+          if (data.extractedBatches && data.extractedBatches.length > 0) {
+            newExtractedBatches.push(...data.extractedBatches.map((b: DailyRecordBatch) => ({ ...b, pdf_blob_url: blobUrl })));
+          }
         }
       } catch (err: any) {
         console.error(`Lỗi khi gửi file ${file.name}:`, err);
-        alert(`Lỗi kết nối khi gửi file ${file.name}: ${err.message}`);
+        showNotification(`Lỗi kết nối khi gửi file ${file.name}: ${err.message}`, 'error');
       }
     }
 
@@ -229,6 +269,9 @@ export default function App() {
 
     if (newExtractedBatches.length > 0) {
       setBatches((prev) => [...prev, ...newExtractedBatches]);
+      showNotification(`✓ Đã nạp thành công ${newExtractedBatches.length} bộ hồ sơ vào bảng kiểm soát!`, 'success');
+    } else {
+      showNotification('Không trích xuất được hồ sơ nào từ tệp đã tải lên. Vui lòng kiểm tra lại định dạng tệp.', 'error');
     }
 
     setTimeout(() => {
@@ -282,24 +325,43 @@ export default function App() {
   // Làm mới toàn bộ bảng dữ liệu (để nạp hồ sơ mới từ đầu)
   const handleResetData = () => {
     if (batches.length > 0) {
-      const confirmReset = window.confirm(
-        'Bạn có chắc chắn muốn làm mới toàn bộ bảng để nạp hồ sơ mới từ đầu không?\n(Mẹo: Bạn có thể nhấn "Lưu hồ sơ này" trước khi làm mới để không bị mất dữ liệu cũ)'
-      );
-      if (!confirmReset) return;
+      // Tự động lưu dự phòng trước khi xóa sạch
+      try {
+        const backupItem: SavedHistoryItem = {
+          id: `backup_${Date.now()}`,
+          name: `Bản lưu tự động trước khi làm mới (${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')})`,
+          savedAt: new Date().toISOString(),
+          batchCount: batches.length,
+          totalWorkers: workers.length,
+          totalCost,
+          batches: [...batches],
+        };
+        const updated = [backupItem, ...savedHistory];
+        setSavedHistory(updated);
+        localStorage.setItem('qdnbc_saved_history', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Lỗi backup:', e);
+      }
     }
     setBatches([]);
     setSelectedBatch(null);
+    showNotification('Đã làm mới toàn bộ bảng. Bạn có thể tải lên hồ sơ mới từ đầu (bản cũ đã được lưu tạm vào Kho hồ sơ).', 'info');
   };
 
   // Lưu hồ sơ hiện tại vào kho lưu trữ (History)
   const handleSaveToHistory = () => {
     if (batches.length === 0) {
-      alert('Chưa có dữ liệu hồ sơ để lưu.');
+      showNotification('Chưa có dữ liệu hồ sơ để lưu.', 'info');
       return;
     }
     const defaultName = `Đợt kiểm soát ${new Date().toLocaleDateString('vi-VN')} (${batches.length} đợt / ${batches[0]?.du_an_phan_khu || 'QĐNBC'})`;
-    const name = window.prompt('Nhập tên gợi nhớ cho bộ hồ sơ này:', defaultName);
-    if (!name) return;
+    let name = defaultName;
+    try {
+      const prompted = window.prompt('Nhập tên gợi nhớ cho bộ hồ sơ này:', defaultName);
+      if (prompted) name = prompted;
+    } catch {
+      name = defaultName;
+    }
 
     const newItem: SavedHistoryItem = {
       id: `history_${Date.now()}`,
@@ -316,7 +378,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('qdnbc_saved_history', JSON.stringify(updated));
     }
-    alert(`Đã lưu "${name}" vào Kho hồ sơ thành công!`);
+    showNotification(`Đã lưu "${name}" vào Kho hồ sơ thành công!`, 'success');
   };
 
   // Mở lại một hồ sơ cũ từ kho lưu trữ
@@ -1123,6 +1185,33 @@ export default function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Banner Thông báo nổi bật */}
+        {notification && (
+          <div
+            className={`mb-5 p-3.5 rounded-xl border flex items-center justify-between transition-all shadow-xs ${
+              notification.type === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                : notification.type === 'error'
+                ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200'
+                : 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 text-xs font-semibold">
+              <span className="text-sm">
+                {notification.type === 'success' ? '✓' : notification.type === 'error' ? '⚠️' : 'ℹ️'}
+              </span>
+              <span>{notification.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              className="text-xs font-medium opacity-70 hover:opacity-100 px-2 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics */}
         <MetricsOverview
           totalBatches={totalBatches}

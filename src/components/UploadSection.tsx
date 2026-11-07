@@ -53,8 +53,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cấu hình mô hình AI & OCR
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'claude' | 'tesseract'>('gemini');
+  // Cấu hình mô hình AI & OCR - Mặc định Claude vì đã cài sẵn token và proxy
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'claude' | 'tesseract'>(() => {
+    return (typeof window !== 'undefined' ? (localStorage.getItem('ai_provider') as any) : null) || 'claude';
+  });
   const [claudeApiKey, setClaudeApiKey] = useState(() => {
     return typeof window !== 'undefined' ? localStorage.getItem('claude_api_key') || '' : '';
   });
@@ -62,12 +64,34 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     return typeof window !== 'undefined' ? localStorage.getItem('claude_base_url') || '' : '';
   });
   const [claudeModel, setClaudeModel] = useState(() => {
-    return typeof window !== 'undefined' ? localStorage.getItem('claude_model') || 'claude-3-7-sonnet-20250219' : 'claude-3-7-sonnet-20250219';
+    return typeof window !== 'undefined' ? localStorage.getItem('claude_model') || 'claude-sonnet-5' : 'claude-sonnet-5';
   });
   const [showClaudeConfigModal, setShowClaudeConfigModal] = useState(false);
   const [showClaudeProModal, setShowClaudeProModal] = useState(false);
   const [claudeProText, setClaudeProText] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+
+  const filterSupportedFiles = (fileList: FileList | File[]) => {
+    return Array.from(fileList).filter((f) => {
+      const name = f.name.toLowerCase();
+      return (
+        f.type === 'application/pdf' ||
+        f.type.startsWith('image/') ||
+        name.endsWith('.pdf') ||
+        name.endsWith('.png') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.webp')
+      );
+    });
+  };
+
+  const handleSelectAiProvider = (provider: 'gemini' | 'claude' | 'tesseract') => {
+    setAiProvider(provider);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ai_provider', provider);
+    }
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -84,23 +108,20 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const pdfFiles = Array.from(e.dataTransfer.files).filter(
-        (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
-      );
-      if (pdfFiles.length > 0) {
-        onProcessFiles(pdfFiles, { aiProvider, claudeApiKey, claudeBaseURL, claudeModel });
+      const validFiles = filterSupportedFiles(e.dataTransfer.files);
+      if (validFiles.length > 0) {
+        onProcessFiles(validFiles, { aiProvider, claudeApiKey, claudeBaseURL, claudeModel });
       }
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const pdfFiles = Array.from(e.target.files).filter(
-        (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
-      );
-      if (pdfFiles.length > 0) {
-        onProcessFiles(pdfFiles, { aiProvider, claudeApiKey, claudeBaseURL, claudeModel });
+      const validFiles = filterSupportedFiles(e.target.files);
+      if (validFiles.length > 0) {
+        onProcessFiles(validFiles, { aiProvider, claudeApiKey, claudeBaseURL, claudeModel });
       }
+      e.target.value = '';
     }
   };
 
@@ -132,13 +153,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <span>Tải Lên Hồ Sơ Công Nhật Đối Trừ (PDF)</span>
+            <span>Tải Lên Hồ Sơ Công Nhật Đối Trừ (PDF / Ảnh)</span>
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
               QĐNBC Chuẩn
             </span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Bóc tách chữ viết tay Biên bản hiện trường & Nhật ký công nhật, soi ảnh Timemark bằng Gemini hoặc Claude.
+            Bóc tách chữ viết tay Biên bản hiện trường & Nhật ký công nhật, nhận diện khuôn mặt và thẻ Timemark qua Claude AI hoặc OCR.
           </p>
         </div>
 
@@ -148,19 +169,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
             <button
               type="button"
-              onClick={() => setAiProvider('gemini')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                aiProvider === 'gemini'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>Google Gemini</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiProvider('claude')}
+              onClick={() => handleSelectAiProvider('claude')}
               className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                 aiProvider === 'claude'
                   ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs'
@@ -172,7 +181,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setAiProvider('tesseract')}
+              onClick={() => handleSelectAiProvider('tesseract')}
               className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                 aiProvider === 'tesseract'
                   ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
@@ -181,6 +190,18 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             >
               <Cpu className="w-3.5 h-3.5" />
               <span>Tesseract OCR (Google)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectAiProvider('gemini')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                aiProvider === 'gemini'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Google Gemini</span>
             </button>
           </div>
 
@@ -307,7 +328,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf"
+            accept=".pdf, .png, .jpg, .jpeg, .webp, image/*"
             multiple
             onChange={handleChange}
             className="hidden"
@@ -319,10 +340,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Kéo thả file PDF vào đây hoặc <span className="text-blue-600 dark:text-blue-400 underline">chọn từ máy tính</span>
+                Kéo thả file PDF hoặc Ảnh hồ sơ vào đây hoặc <span className="text-blue-600 dark:text-blue-400 underline">chọn từ máy tính</span>
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Đang xử lý qua mô hình: <strong className="text-slate-700 dark:text-slate-300">{aiProvider === 'gemini' ? 'Gemini 3.8 Flash Vision' : aiProvider === 'claude' ? `Claude (${claudeModel})` : 'Tesseract OCR (Google Offline)'}</strong>
+                Đang xử lý qua mô hình: <strong className="text-amber-600 dark:text-amber-400">{aiProvider === 'claude' ? `Claude (${claudeModel})` : aiProvider === 'gemini' ? 'Gemini 3.8 Flash Vision' : 'Tesseract OCR (Google Offline)'}</strong>
               </p>
             </div>
           </div>
