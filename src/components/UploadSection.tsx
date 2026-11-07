@@ -368,22 +368,43 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
         )}
 
-        {/* Nút nạp hồ sơ mẫu nhanh */}
+        {/* Nút nạp hồ sơ mẫu nhanh & Chạy thử tệp thực tế */}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Chưa có sẵn file PDF hồ sơ công nhật?</span>
+            <span>Thử nghiệm nhanh dữ liệu thực tế:</span>
           </div>
 
-          <button
-            type="button"
-            onClick={onLoadSample}
-            disabled={isProcessing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Nạp 5 bộ hồ sơ mẫu QĐNBC (Có cả ca chuẩn và ca vi phạm thực tế)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const resp = await fetch('/assets/aistudio/1_7.BBK_Ho_ng_Trung_Anh_3877531_31.03.XD_K__2_425149d1.pdf');
+                  const blob = await resp.blob();
+                  const sampleFile = new File([blob], '1_7.BBK_Hoang_Trung_Anh_3877531_15trang.pdf', { type: 'application/pdf' });
+                  onProcessFiles([sampleFile], { aiProvider, claudeApiKey, claudeBaseURL, claudeModel });
+                } catch (e) {
+                  console.error('Lỗi tải tệp mẫu:', e);
+                }
+              }}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-xs"
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Chạy quét trực tiếp file 15 trang thực tế (Hoàng Trung Anh)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onLoadSample}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Nạp 5 bộ mẫu giả lập</span>
+            </button>
+          </div>
         </div>
       </div>
 
