@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Kiểm Soát Hồ Sơ Công Nhật (QĐNBC)",
+  "short_name": "KSCP QĐNBC",
+  "description": "Hệ thống kiểm soát và cảnh báo hồ sơ công nhật xây dựng chuẩn QĐNBC Vincons",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

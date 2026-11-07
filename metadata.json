@@ -1,0 +1,6 @@
+{
+  "name": "Kiểm Soát Hồ Sơ Công Nhật (QĐNBC)",
+  "description": "Hệ thống kiểm soát và cảnh báo hồ sơ công nhật xây dựng QĐNBC: tự động bóc tách chữ viết tay Biên bản hiện trường & Nhật ký công nhật, soi ảnh Timemark, rà soát trùng lặp nhân sự và xuất báo cáo Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
